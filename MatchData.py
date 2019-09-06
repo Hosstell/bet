@@ -11,8 +11,7 @@ def add_to_file(set_game, coeff, result):
 
 
 class MatchData:
-    def __init__(self, match_iD):
-        self.id = match_iD
+    def __init__(self, link):
         self.data = {}
         self.MINIMAL_COUNT_SCORES = 2
         self.max_update_time = 5
@@ -20,8 +19,10 @@ class MatchData:
         self.bets = []
         self.AMOUNT = 50
 
-        link = "https://www.myscore.ru/match/{0}/#point-by-point;1".format(match_iD)
-        self.window = webdriver.Chrome()
+        options = webdriver.ChromeOptions()
+        options.add_argument('--window-size=1000,500')
+        self.window = webdriver.Chrome(chrome_options=options)
+        self.window.set_window_position(0, 0)
         self.window.get(link)
         self.update_data()
 
@@ -30,7 +31,11 @@ class MatchData:
             self.__update_data()
             self.last_update_time = time.time()
         except:
-            self.update_data()
+            pass
+
+    def is_active_game(self):
+        status_text = self.window.find_element_by_class_name('info-status').text
+        return 'сет' in status_text
 
     def __update_data(self):
         self.data["scores"] = self.__get_information_of_games()
@@ -39,7 +44,7 @@ class MatchData:
     def __get_information_of_games(self):
         data = []
         set = self.__get_current_set()
-        filling = self.__get_initial_filing()
+        filling = self.get_initial_filing()
         for i in range(set):
             self.__click_to_set(i + 1)
             statistics = self.window.find_element_by_id("tab-mhistory-{0}-history".format(i + 1))
@@ -75,19 +80,27 @@ class MatchData:
         return elem
 
     def __get_current_set(self):
-        return int(self.window.find_element_by_class_name("mstat").text[0])
+        table = self.window.find_elements_by_class_name('scoreboard')
+        current_set = sum(map(lambda x: int(x.text), table))
+        if self.is_active_game():
+            current_set += 1
+        return current_set
+        # return int(self.window.find_element_by_class_name("mstat").text[0])
 
     def __get_current_game(self):
-        scores = self.window.find_element_by_class_name("mstat").text.split("\n")[1]
-        games = scores.split("(")[0].split(":")
-        game = int(games[0]) + int(games[1]) + 1
-        return game
+        try:
+            scores = self.window.find_element_by_class_name("mstat").text.split("\n")[1]
+            games = scores.split("(")[0].split(":")
+            game = int(games[0]) + int(games[1]) + 1
+            return game
+        except:
+            return 0
 
     def get_current_set_and_game(self):
         return (self.__get_current_set(), self.__get_current_game())
 
     # Возращает первые подачи в сетах
-    def __get_initial_filing(self):
+    def get_initial_filing(self):
         mas = []
         history = self.window.find_element_by_id('match-history-content')
         for i in range(1, 6, 1):
@@ -152,7 +165,7 @@ class MatchData:
         return time.time() - self.last_update_time > self.max_update_time
 
     def get_probability_by_set_game(self, set, game, player):
-        ball_player_in_game = self.__get_initial_filing()[int(set)-1]
+        ball_player_in_game = self.get_initial_filing()[int(set)-1]
 
         if int(game) % 2 == 0:
             ball_player_in_game = ['left', 'right'][ball_player_in_game == 'left']
@@ -177,6 +190,14 @@ class MatchData:
             return ['right', 'left'][left_player > right_player]
         except:
             pass
+
+    def ball_player_set_game(self, set, game):
+        try:
+            start_ball_player = self.data["scores"][set-1][0]['player']
+            next_ball_player = ['right', 'left'][start_ball_player == 'right']
+            return next_ball_player if game % 2 == 0 else start_ball_player
+        except:
+            return None
 
     def make_bet(self, set_game, player, coeff):
         maked_set_game = list(map(lambda x: x['set_game'], self.bets))
@@ -204,22 +225,19 @@ class MatchData:
 
             bet['status'] = True
 
+    def get_names(self):
+        names = self.window.find_elements_by_class_name('participant-imglink')[1::2]
+        return list(map(lambda x: x.text, names))
+
     def __del__(self):
         self.window.close()
         self.window.quit()
 
 
 if __name__ == '__main__':
-    a = [1, 2, 3]
-    for b in a:
-        if b == 2:
-            del b
-            break
-    print(a)
+    match = MatchData('https://www.myscore.ru/match/bT72dnmk/#match-summary')
+    print(match.get_names())
 
-
-    match = MatchData('IB1uavy9')
-    print(match.get_current_set_and_game())
-    print(match.get_probability_by_set_game(1, 8, 'right'))
-    print(match.get_probability_by_set_game(1, 9, 'left'))
-    print(match.get_probability_by_set_game(1, 9, 'right'))
+    # print(match.ball_player_set_game(2, 1))
+    # print(match.get_probability_by_set_game(2, 2, 'right'))
+    # print(match.get_probability_by_set_game(2, 2, 'left'))

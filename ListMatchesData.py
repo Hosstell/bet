@@ -10,14 +10,17 @@ import Levenshtein
 class MyScoreMatchList:
     def __init__(self):
         self.window = webdriver.Chrome()
+        self.window.minimize_window()
         self.window.get("https://www.myscore.ru/tennis/")
         WebDriverWait(self.window, 30).until(EC.presence_of_element_located((By.CLASS_NAME, "container__fsbody")))
         tab_panel = self.window.find_element_by_class_name('tabs__list')
         tab_panel.find_elements_by_class_name('tabs__text')[1].click()
 
-    def get_id_of_online_matches(self):
+    def get_links_of_online_matches(self):
         matches = self.window.find_elements_by_class_name("event__match--live")[::2]
-        return [match.get_attribute('id').split("_")[-1] for match in matches]
+        match_ids = [match.get_attribute('id').split("_")[-1] for match in matches]
+        link = 'https://www.myscore.ru/match/{0}/#point-by-point;1'
+        return list(map(lambda x: link.format(x), match_ids))
 
     def get_game_by_player_names(self, names):
         games = self.window.find_elements_by_class_name('event__match')
